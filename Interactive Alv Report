@@ -1,0 +1,289 @@
+REPORT zr_interactive_alv.
+
+**if user clicks on hotspot navigate to va03 t-code otherwise returns order line item details
+
+TABLES: sscrfields.
+
+TYPES: BEGIN OF lty_vbak,
+         vbeln TYPE vbeln_va,
+         ernam TYPE ernam,
+         vbtyp TYPE vbtyp,
+         netwr TYPE netwr,
+       END OF lty_vbak.
+
+TYPES: BEGIN OF lty_vbap,
+         vbeln TYPE vbeln,
+         posnr TYPE posnr,
+         matnr TYPE matnr,
+         matkl TYPE matkl,
+       END OF lty_vbap.
+
+DATA: lv_vbeln TYPE vbeln_va.
+
+DATA: wa_vbak TYPE lty_vbak,
+      it_vbak TYPE TABLE OF lty_vbak.
+
+DATA: wa_slis TYPE slis_fieldcat_alv,
+      it_slis TYPE TABLE OF slis_fieldcat_alv.
+
+DATA: wa_slis_item TYPE slis_fieldcat_alv,
+      it_slis_item TYPE TABLE OF slis_fieldcat_alv.
+
+DATA: wa_sort TYPE slis_sortinfo_alv,
+      it_sort TYPE slis_t_sortinfo_alv. " it_sort type table of SLIS_SORTINFO_ALV (both are equal)
+
+DATA: wa_filter TYPE slis_filter_alv,
+      it_filter TYPE slis_t_filter_alv. " it_filter type table of SLIS_FILTER_ALV (both are equal)
+
+DATA: wa_vbap TYPE lty_vbap,
+      it_vbap TYPE TABLE OF lty_vbap.
+
+SELECT-OPTIONS s_vbeln FOR lv_vbeln.
+
+SELECTION-SCREEN SKIP 2.
+
+SELECTION-SCREEN: PUSHBUTTON 25(10) psh1 USER-COMMAND push1,
+                  PUSHBUTTON 55(10) psh2 USER-COMMAND push2.
+
+INITIALIZATION.
+  psh1 = 'Display'.
+  psh2 = 'Exit'.
+
+AT SELECTION-SCREEN.
+  IF sscrfields-ucomm = 'PUSH1'.
+    sscrfields-ucomm = 'ONLI'.
+  ELSEIF sscrfields-ucomm = 'PUSH2'.
+    LEAVE PROGRAM.
+  ENDIF.
+
+START-OF-SELECTION.
+  PERFORM fetch_data.
+  PERFORM catalog_design.
+  PERFORM sorting. " Applying Sorting in program level to report
+  PERFORM filtering. " Applying Filtering in program level to report
+
+END-OF-SELECTION.
+  PERFORM display_data.
+
+FORM fetch_data.
+  SELECT vbeln ernam vbtyp netwr FROM vbak INTO TABLE it_vbak WHERE vbeln IN s_vbeln.
+ENDFORM.
+
+
+
+FORM display_data.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+*     I_INTERFACE_CHECK        = ' '
+*     I_BYPASSING_BUFFER       = ' '
+*     I_BUFFER_ACTIVE          = ' '
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'ORDER_GUI'
+      i_callback_user_command  = 'USRCMD'
+*     I_CALLBACK_TOP_OF_PAGE   = ' '
+*     I_CALLBACK_HTML_TOP_OF_PAGE       = ' '
+*     I_CALLBACK_HTML_END_OF_LIST       = ' '
+*     I_STRUCTURE_NAME         = 'VBAK'
+*     I_BACKGROUND_ID          = ' '
+      i_grid_title             = 'Sales Header Details'
+*     I_GRID_SETTINGS          =
+*     IS_LAYOUT                =
+      it_fieldcat              = it_slis
+*     IT_EXCLUDING             =
+*     IT_SPECIAL_GROUPS        =
+      it_sort                  = it_sort
+*     IT_FILTER                = it_filter  " Tried to apply the filter getting the error message but the way that i bulid the structure is correct.
+*     IS_SEL_HIDE              =
+*     I_DEFAULT                = 'X'
+*     I_SAVE                   = ' '
+*     IS_VARIANT               =
+*     IT_EVENTS                =
+*     IT_EVENT_EXIT            =
+*     IS_PRINT                 =
+*     IS_REPREP_ID             =
+*     I_SCREEN_START_COLUMN    = 0
+*     I_SCREEN_START_LINE      = 0
+*     I_SCREEN_END_COLUMN      = 0
+*     I_SCREEN_END_LINE        = 0
+*     I_HTML_HEIGHT_TOP        = 0
+*     I_HTML_HEIGHT_END        = 0
+*     IT_ALV_GRAPHICS          =
+*     IT_HYPERLINK             =
+*     IT_ADD_FIELDCAT          =
+*     IT_EXCEPT_QINFO          =
+*     IR_SALV_FULLSCREEN_ADAPTER        =
+*     IMPORTING
+*     E_EXIT_CAUSED_BY_CALLER  =
+*     ES_EXIT_CAUSED_BY_USER   =
+    TABLES
+      t_outtab                 = it_vbak
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+ENDFORM.
+FORM usrcmd  USING r_ucomm LIKE sy-ucomm
+                              rs_selfield TYPE slis_selfield.
+  IF r_ucomm = '&DISP' OR r_ucomm = 'DISP'.
+    READ TABLE it_vbak INTO wa_vbak INDEX rs_selfield-tabindex.
+    SELECT vbeln posnr matnr matkl FROM vbap INTO TABLE it_vbap WHERE vbeln = wa_vbak-vbeln.
+    IF sy-subrc = 0.
+      PERFORM item_catalog_design.
+      CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+        EXPORTING
+*         I_INTERFACE_CHECK  = ' '
+*         I_BYPASSING_BUFFER = ' '
+*         I_BUFFER_ACTIVE    = ' '
+          i_callback_program = sy-repid
+*         I_CALLBACK_PF_STATUS_SET          = ' '
+*         I_CALLBACK_USER_COMMAND           = ' '
+*         I_CALLBACK_TOP_OF_PAGE            = ' '
+*         I_CALLBACK_HTML_TOP_OF_PAGE       = ' '
+*         I_CALLBACK_HTML_END_OF_LIST       = ' '
+*         I_STRUCTURE_NAME   = 'VBAP'
+*         I_BACKGROUND_ID    = ' '
+          i_grid_title       = 'Sales Order Line Item Details'
+*         I_GRID_SETTINGS    =
+*         IS_LAYOUT          =
+          it_fieldcat        = it_slis_item
+*         IT_EXCLUDING       =
+*         IT_SPECIAL_GROUPS  =
+*         IT_SORT            =
+        TABLES
+          t_outtab           = it_vbap
+        EXCEPTIONS
+          program_error      = 1
+          OTHERS             = 2.
+      IF sy-subrc <> 0.
+* Implement suitable error handling here
+      ENDIF.
+
+    ENDIF.
+  ELSEIF r_ucomm = '&IC1'. " hotspot functional code : &IC1.
+    SET PARAMETER ID 'AUN' FIELD rs_selfield-value. " Set the value based on parameter id which is available in data element level.
+*    CALL TRANSACTION 'VA03'. " call the transaction and come back to main program when you click back button
+    LEAVE TO TRANSACTION 'VA03'. " call the transaction and come back to home screen when user click back button
+  ELSEIF r_ucomm = '&EXT' OR r_ucomm = 'EXIT'.
+    LEAVE PROGRAM.
+  ENDIF.
+ENDFORM.
+
+FORM catalog_design.
+  REFRESH it_slis.
+**  1st row
+  wa_slis-row_pos = 1.
+  wa_slis-col_pos = 1.
+  wa_slis-fieldname = 'VBELN'.
+  wa_slis-tabname = 'VBAK'.
+  wa_slis-seltext_m = 'Doc Num'.
+  wa_slis-hotspot = 'X'.
+  APPEND wa_slis TO it_slis.
+  CLEAR wa_slis.
+
+**2nd row
+  wa_slis-row_pos = 1.
+  wa_slis-col_pos = 2.
+  wa_slis-fieldname = 'ERNAM'.
+  wa_slis-tabname = 'VBAK'.
+  wa_slis-seltext_m = 'Created By'.
+  APPEND wa_slis TO it_slis.
+  CLEAR wa_slis.
+
+**  3rd Row
+  wa_slis-row_pos = 1.
+  wa_slis-col_pos = 3.
+  wa_slis-fieldname = 'VBTYP'.
+  wa_slis-tabname = 'VBAK'.
+  wa_slis-seltext_m = 'Doc Category'.
+  APPEND wa_slis TO it_slis.
+  CLEAR wa_slis.
+
+**  4th Row
+  wa_slis-row_pos = 1.
+  wa_slis-col_pos = 4.
+  wa_slis-fieldname = 'NETWR'.
+  wa_slis-tabname = 'VBAK'.
+  wa_slis-seltext_m = 'Amount'.
+  APPEND wa_slis TO it_slis.
+  CLEAR wa_slis.
+ENDFORM.
+
+FORM item_catalog_design.
+  refresh it_slis_item.
+**  1st row
+  wa_slis_item-row_pos = 1.
+  wa_slis_item-col_pos = 1.
+  wa_slis_item-fieldname = 'VBELN'.
+  wa_slis_item-tabname = 'VBAP'.
+  wa_slis_item-seltext_m = 'Doc Num'.
+  APPEND wa_slis_item TO it_slis_item.
+  CLEAR wa_slis_item.
+
+**2nd row
+  wa_slis_item-row_pos = 1.
+  wa_slis_item-col_pos = 2.
+  wa_slis_item-fieldname = 'POSNR'.
+  wa_slis_item-tabname = 'VBAP'.
+  wa_slis_item-seltext_m = 'Item Number'.
+  APPEND wa_slis_item TO it_slis_item.
+  CLEAR wa_slis_item.
+
+**  3rd Row
+  wa_slis_item-row_pos = 1.
+  wa_slis_item-col_pos = 3.
+  wa_slis_item-fieldname = 'MATNR'.
+  wa_slis_item-tabname = 'VBAP'.
+  wa_slis_item-seltext_m = 'Mat. Number'.
+  APPEND wa_slis_item TO it_slis_item.
+  CLEAR wa_slis_item.
+
+**  4th Row
+  wa_slis_item-row_pos = 1.
+  wa_slis_item-col_pos = 4.
+  wa_slis_item-fieldname = 'MATKL'.
+  wa_slis_item-tabname = 'VBAP'.
+  wa_slis_item-seltext_m = 'Description'.
+  APPEND wa_slis_item TO it_slis_item.
+  CLEAR wa_slis_item.
+ENDFORM.
+
+FORM order_gui USING rt_extab TYPE slis_t_extab.
+  SET PF-STATUS 'SET_GUI'.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SORTING
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sorting .
+  wa_sort-fieldname = 'VBELN'.
+  wa_sort-down = 'X'. " Descending
+*  wa_sort-up = 'X'. " Ascending
+  APPEND wa_sort TO it_sort.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FILTERING
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM filtering . " We can also do multiple by appending mutiple values to the filter internal table.
+  wa_filter-fieldname = 'ERNAM'.
+  wa_filter-tabname = 'IT_VBAK'.
+  wa_filter-valuf_int = 'NARESH'. " Low Value
+*  wa_filter-valut_int = 'NARESH'. " High Value
+  wa_filter-sign0 = 'I'. " It's like select options table parameters[sign, option, low, high]. we can filter based on the requirement.
+  wa_filter-optio = 'EQ'.
+
+  APPEND wa_filter TO it_filter.
+
+ENDFORM.
